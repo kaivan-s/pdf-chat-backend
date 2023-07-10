@@ -14,7 +14,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 from datetime import datetime
 
-cred = credentials.Certificate('/Users/kaivan/pdf-chat-backend/pdf-chat-cc707-firebase-adminsdk-sqzre-0801f75402.json')
+cred = credentials.Certificate('pdf-chat-cc707-firebase-adminsdk-sqzre-0801f75402.json')
 firebase_admin.initialize_app(cred)
 
 db = firestore.client()
