@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_cors import cross_origin
 from langchain.document_loaders import PyPDFLoader
 from langchain.llms import OpenAI
 from langchain.chains import RetrievalQA
@@ -31,10 +32,6 @@ def authenticate_request(request):
     decoded_token = auth.verify_id_token(id_token)
     uid = decoded_token['uid']
     return uid
-
-@app.route('/')
-def hello_world():
-    return "Hello world"
 
 @app.route('/api/process-pdf', methods=['POST'])
 def process_pdf():
@@ -215,6 +212,7 @@ def get_conversation_messages():
     return jsonify(formatted_messages), 200
     
 @app.route('/create-checkout-session', methods=['POST'])
+@cross_origin()
 def create_checkout_session():
     data = request.get_json()
     uid = data['uid']  # Here is where you extract the uid
