@@ -22,7 +22,6 @@ db = firestore.client()
 import stripe
 
 app = Flask(__name__)
-app.config['CORS_HEADERS'] = 'Content-Type'
 CORS(app)
 
 qa = {}
@@ -213,7 +212,7 @@ def get_conversation_messages():
     return jsonify(formatted_messages), 200
     
 @app.route('/create-checkout-session', methods=['POST'])
-@cross_origin()
+@cross_origin(supports_credentials=True)
 def create_checkout_session():
     data = request.get_json()
     uid = data['uid']  # Here is where you extract the uid
