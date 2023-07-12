@@ -13,6 +13,12 @@ import time
 from werkzeug.utils import secure_filename
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
+from flask import Response
+from time import sleep
+from flask import Flask, Response, request
+from flask_cors import CORS
+import threading
+import time
 from datetime import datetime
 
 cred = credentials.Certificate('pdf-chat-cc707-firebase-adminsdk-sqzre-0801f75402.json')
@@ -26,6 +32,7 @@ app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['CORS_ALLOW_ALL_ORIGINS'] = True
 CORS(app)
 
+current_response = None
 qa = {}
 stripe.api_key = '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'
 
@@ -57,45 +64,94 @@ def process_pdf():
 
         text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
         texts = text_splitter.split_documents(documents)
-        embeddings = OpenAIEmbeddings(openai_api_key="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")
+        embeddings = OpenAIEmbeddings(openai_api_key="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")
         db = Chroma.from_documents(texts, embeddings)
         retriever = db.as_retriever(search_type="similarity", search_kwargs={"k":1})
         qa[file_name] = RetrievalQA.from_chain_type(
-            llm=OpenAI(openai_api_key="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"), chain_type="stuff", retriever=retriever, return_source_documents=True)
+            llm=OpenAI(openai_api_key="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"), chain_type="stuff", retriever=retriever, return_source_documents=True)
         return jsonify({"message": "Successfully Uploaded"})
 
     except Exception as e:
         print("Error processing PDF:", e)
         return jsonify({"error": "Error processing PDF file"}), 500
 
+# @app.route('/api/chat', methods=['POST'])
+# def chat():
+#     global qa  # Declare the 'qa' object as global
+
+#     uid = authenticate_request(request)
+#     message = request.json.get('message')
+#     file_name = request.json.get('backendFile')
+#     save_chat_message({'text':message,'type':'user'}, file_name, uid)
+#     if not message:
+#         return jsonify({"error": "No message provided"}), 400
+
+#     try:
+#         # Process the message and get a response from the backend
+#         result = qa[file_name]({"query": message})
+#         save_chat_message({'text':result['result'],'type':'backend'}, file_name, uid)
+
+#         # Convert the result to a JSON serializable format
+#         def generate_response(result):
+#             for word in result['result'].split():
+#                 print(word)
+#                 yield f"data: {word}\n\n"
+#                 sleep(0.5)  # delay for demonstration, you can adjust or remove
+
+#         return Response(generate_response(result), mimetype='text/event-stream')
+#     except Exception as e:
+#         print("Error processing message:", e)
+#         print(traceback.format_exc())  # Add this line to print the traceback
+
+#         return jsonify({"error": "Error processing message"}), 500
+    
+response_generator = None
+lock = threading.Lock()
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
-    global qa  # Declare the 'qa' object as global
-    print(qa)
-
     uid = authenticate_request(request)
     message = request.json.get('message')
     file_name = request.json.get('backendFile')
     save_chat_message({'text':message,'type':'user'}, file_name, uid)
+    global response_generator 
+    message = request.json.get('message')
     if not message:
         return jsonify({"error": "No message provided"}), 400
 
     try:
         # Process the message and get a response from the backend
-        result = qa[file_name]({"query": message})
+        result =qa[file_name]({"query": message})
         save_chat_message({'text':result['result'],'type':'backend'}, file_name, uid)
 
         # Convert the result to a JSON serializable format
-        json_result = {
-            "query": result['query'],
-            "answer": result['result']
-        }
-        return json_result
+        def generate_response(result):
+            for word in result['result'].split():
+                print(word)
+                yield word
+                time.sleep(0.2)  # delay for demonstration, you can adjust or remove
+
+        with lock:
+            response_generator = generate_response(result)
+
+        return {"status": "message received"}
     except Exception as e:
         print("Error processing message:", e)
         print(traceback.format_exc())  # Add this line to print the traceback
 
         return jsonify({"error": "Error processing message"}), 500
+
+@app.route('/api/chat/stream', methods=['GET'])
+def chat_stream():
+    def event_stream():
+        global response_generator
+        while True:
+            with lock:
+                word = next(response_generator, None)
+            if word is None:
+                break
+            yield f"data: {word}\n\n"
+    return Response(event_stream(), mimetype="text/event-stream")
 
 @app.route('/api/delete-conversation', methods=['POST'])
 def delete_conversation():
@@ -264,6 +320,21 @@ def stripe_webhook():
         })
 
     return '', 200
+
+@app.route('/api/user/subscription', methods=['GET'])
+def get_user_subscription():
+    try:
+        uid = authenticate_request(request)
+        user_ref = db.collection('users').document(uid)
+        user = user_ref.get()
+        if user.exists:
+            return jsonify({'subscribed': user.to_dict().get('subscribed', False)}), 200
+        else:
+            return jsonify({'error': 'No such user exists.'}), 404
+    except Exception as e:
+        print(f"Error getting user's subscription status: {e}")
+        return jsonify({'error': 'Error getting user subscription status.'}), 500
+
 
 
 if __name__ == "__main__":
