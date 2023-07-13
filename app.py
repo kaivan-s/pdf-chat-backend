@@ -20,8 +20,13 @@ from flask_cors import CORS
 import threading
 import time
 from datetime import datetime
+import os
 
-cred = credentials.Certificate('pdf-chat-cc707-firebase-adminsdk-sqzre-0801f75402.json')
+current_dir = os.path.dirname(os.path.realpath(__file__))
+json_path = os.path.join(current_dir, 'pdf-chat-cc707-firebase-adminsdk-sqzre-0801f75402.json')
+
+
+cred = credentials.Certificate(json_path)
 firebase_admin.initialize_app(cred)
 
 db = firestore.client()
