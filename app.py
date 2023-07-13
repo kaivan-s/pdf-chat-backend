@@ -30,7 +30,7 @@ import stripe
 app = Flask(__name__)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['CORS_ALLOW_ALL_ORIGINS'] = True
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "https://docchat.in"}})
 
 current_response = None
 qa = {}
