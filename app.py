@@ -16,7 +16,7 @@ from firebase_admin import credentials, firestore, auth
 from flask import Response
 from time import sleep
 from flask import Flask, Response, request
-from flask_cors import CORS
+import requests
 import threading
 import time
 from datetime import datetime
@@ -40,6 +40,8 @@ CORS(app, resources={r"/api/*": {"origins": "https://docchat.in"}})
 current_response = None
 qa = {}
 stripe.api_key = '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'
+
+OPENAI_KEY = os.getenv('OPENAI_KEY')
 
 def authenticate_request(request):
     id_token = request.headers['Authorization'].split(' ').pop()
@@ -69,11 +71,11 @@ def process_pdf():
 
         text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
         texts = text_splitter.split_documents(documents)
-        embeddings = OpenAIEmbeddings(openai_api_key="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")
+        embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_KEY)
         db = Chroma.from_documents(texts, embeddings)
         retriever = db.as_retriever(search_type="similarity", search_kwargs={"k":1})
         qa[file_name] = RetrievalQA.from_chain_type(
-            llm=OpenAI(openai_api_key="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"), chain_type="stuff", retriever=retriever, return_source_documents=True)
+            llm=OpenAI(openai_api_key=OPENAI_KEY), chain_type="stuff", retriever=retriever, return_source_documents=True)
         return jsonify({"message": "Successfully Uploaded"})
 
     except Exception as e:
@@ -145,6 +147,20 @@ def chat():
         print(traceback.format_exc())  # Add this line to print the traceback
 
         return jsonify({"error": "Error processing message"}), 500
+    
+@app.route("/pdf", methods=['GET'])
+def get_pdf():
+    url = request.args.get("url", default = None, type = str)
+    if url is None:
+        return jsonify(error="Missing URL parameter"), 400
+
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        return Response(response.content, mimetype='application/pdf')
+    except requests.exceptions.RequestException as err:
+        print ("Error fetching PDF", err)
+        return jsonify(error="Failed to fetch PDF"), 500
 
 @app.route('/api/chat/stream', methods=['GET'])
 def chat_stream():
@@ -286,8 +302,8 @@ def create_checkout_session():
         'quantity': 1,
       }],
       mode='subscription',
-      success_url='http://localhost:3000/',
-      cancel_url='http://localhost:3000/pricing',
+      success_url='https://docchat.in/',
+      cancel_url='https://docchat.in/landing',
       client_reference_id=uid,
     )
 
@@ -297,7 +313,7 @@ def create_checkout_session():
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
-    endpoint_secret = 'your_endpoint_secret'  # replace with your endpoint secret
+    endpoint_secret = 'whsec_QF3veDvW6IevNmpMNCzXsso8z6P6H57w'  # replace with your endpoint secret
 
     try:
         event = stripe.Webhook.construct_event(
