@@ -33,7 +33,7 @@ db = firestore.client()
 import stripe
 
 app = Flask(__name__)
-app.config['CORS_HEADERS'] = 'Content-Type'
+app.config['CORS_HEADERS'] = ['Content-Type', 'Authorization']
 app.config['CORS_ALLOW_ALL_ORIGINS'] = True
 CORS(app, resources={r"/api/*": {"origins": "https://docchat.in"}})
 
@@ -327,7 +327,6 @@ def stripe_webhook():
         return 'Invalid signature', 400
 
     # Handle the checkout.session.completed event
-    print(event)
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
 
